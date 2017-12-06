@@ -81,6 +81,7 @@ feature_engineering = [
     ('scaler', StandardScaler())
 ]
 
+# TODO: extend StackingClassifier and allow it to take pipeline-like inputs
 model_stack = [
     ('logisticregression', LogisticRegression()),
     ('randomforestclassifier', RandomForestClassifier(random_state = 1)),
@@ -90,10 +91,16 @@ model_stack = [
 model_meta = LogisticRegression()
 
 param_grid = {
-    'logisticregression': {'penalty': ['l1', 'l2'], 'C': [0.01, 0.1, 1]},
-    'randomforestclassifier': {'n_estimators': [10, 100], 'max_depth': [3, 5]},
-    'xgbclassifier': {'learning_rate': [0.05, 0.1], 'max_depth': [3, 5]}
+    'logisticregression': {'penalty': ['l1'], 'C': [0.01]},
+    'randomforestclassifier': {'n_estimators': [100], 'max_depth': [5]},
+    'xgbclassifier': {'learning_rate': [0.1], 'max_depth': [5]}
 }
+
+# param_grid = {
+#     'logisticregression': {'penalty': ['l1', 'l2'], 'C': [0.01, 0.1, 1]},
+#     'randomforestclassifier': {'n_estimators': [10, 100], 'max_depth': [3, 5]},
+#     'xgbclassifier': {'learning_rate': [0.05, 0.1], 'max_depth': [3, 5]}
+# }
 
 # hyperparameter tuning with grid search for each model individually
 param_optimal = {}
@@ -120,6 +127,12 @@ pipeline = Pipeline(steps = feature_engineering + \
 
 pipeline.set_params(**param_optimal)
 pipeline.fit(xdata_train, ydata_train)
+
+# see how model is blending
+model_names = [x[0] for x in model_stack]
+model_coef = pipeline.named_steps['stack'].meta_clf_.coef_[0]
+blend = dict(zip(model_names, model_coef))
+print(blend)
 
 # make predictions for our test set
 ydata_test_pred = pipeline.predict_proba(xdata_test)[:,1]
