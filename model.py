@@ -2,12 +2,18 @@ import pandas as pd
 import numpy as np
 
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
 
+from xgboost import XGBClassifier
+
+from mlxtend.classifier import StackingClassifier
+
 from base import OneHotEncoder
+from util import add_dict_prefix
 
 # import our data
 admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
@@ -69,39 +75,54 @@ xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata
 cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id', \
            'race', 'gender', 'payer_code', 'medical_specialty', 'diag']
 
-train_pipeline = Pipeline(steps = [
-    ('cat_encode', OneHotEncoder(columns = cat_var)),
+feature_engineering = [
+    ('cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
     ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
-    ('scaler', StandardScaler()),
-    ('est', LogisticRegression())
-])
+    ('scaler', StandardScaler())
+]
 
-# grid search for hyperparameter tuning
-# param_grid = {
-#     'cat_encode__label_encode_params': [\
-#         {'diag' : {'top_n' : 100, 'min_support' : 0}},\
-#         {'diag' : {'top_n' : 200, 'min_support' : 0}},\
-#         {'diag' : {'top_n' : 300, 'min_support' : 0}}],
-#     'est__penalty': ['l1', 'l2'],
-#     'est__C': [0.01, 0.1, 1]
-# }
+model_stack = [
+    ('logisticregression', LogisticRegression()),
+    ('randomforestclassifier', RandomForestClassifier(random_state = 1)),
+    ('xgbclassifier', XGBClassifier(seed = 1))
+]
+
+model_meta = LogisticRegression()
+
 param_grid = {
-    'cat_encode__label_encode_params': [{'diag' : {'top_n' : 200, 'min_support' : 0}}],
-    'est__penalty': ['l1'],
-    'est__C': [0.01]
+    'logisticregression': {'penalty': ['l1', 'l2'], 'C': [0.01, 0.1, 1]},
+    'randomforestclassifier': {'n_estimators': [10, 100], 'max_depth': [3, 5]},
+    'xgbclassifier': {'learning_rate': [0.05, 0.1], 'max_depth': [3, 5]}
 }
 
-gslr = GridSearchCV(train_pipeline, param_grid = param_grid, scoring = 'roc_auc', cv = 3, verbose = 1)
-gslr.fit(xdata_train, ydata_train)
-print('Best params: %s' % str(gslr.best_params_))
-print('Best params score: %s' % str(gslr.best_score_))
+# hyperparameter tuning with grid search for each model individually
+param_optimal = {}
+for m in model_stack:
+    model_name, model = m
 
-# apply best params to our full train set
-train_pipeline.set_params(**gslr.best_params_)
-train_pipeline.fit(xdata_train, ydata_train)
+    pipeline = Pipeline(steps = feature_engineering + [m])
+    param_grid_temp = add_dict_prefix(param_grid[model_name], model_name)
+
+    gslr = GridSearchCV(pipeline, param_grid = param_grid_temp, scoring = 'roc_auc', cv = 3, verbose = 1)
+    gslr.fit(xdata_train, ydata_train)
+    print('Best %s params: %s' % (model_name, str(gslr.best_params_)))
+    print('Best %s params score: %s' % (model_name, str(gslr.best_score_)))
+
+    param_optimal.update(gslr.best_params_)
+
+# build model stack
+param_optimal = add_dict_prefix(param_optimal, 'stack')
+
+pipeline = Pipeline(steps = feature_engineering + \
+    [('stack', StackingClassifier(classifiers = [x[1] for x in model_stack],
+                                  meta_classifier = model_meta,
+                                  use_probas = True))])
+
+pipeline.set_params(**param_optimal)
+pipeline.fit(xdata_train, ydata_train)
 
 # make predictions for our test set
-ydata_test_pred = train_pipeline.predict_proba(xdata_test)[:,1]
+ydata_test_pred = pipeline.predict_proba(xdata_test)[:,1]
 
 # determine cutoff balancing precision/recall
 precision, recall, threshold = precision_recall_curve(ydata_test, ydata_test_pred)
@@ -111,9 +132,9 @@ print('Confusion matrix:')
 print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int)))
 print('AUC: %s' % roc_auc_score(ydata_test, ydata_test_pred))
 
-# importance scores
-features = train_pipeline.named_steps['cat_encode'].df_columns
-coef = train_pipeline.named_steps['est'].coef_[0]
+# importance scores (from logistic regression)
+features = pipeline.named_steps['cat_encode'].df_columns
+coef = pipeline.named_steps['stack'].clfs_[0].coef_[0]
 importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
 importance = importance.loc[importance.coef != 0,:]
 importance.sort_values(by = ['coef'], ascending = False, inplace = True)

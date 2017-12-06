@@ -7,18 +7,7 @@ from scipy import sparse
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted, column_or_1d
 
-
-# flatten array of items, some of which can be arrays
-def flatten(y):
-    y = [i if isinstance(i, (np.ndarray, list, tuple)) else [i] for i in y]
-    cuts = list(np.cumsum([len(i) for i in y])[:-1])
-    flat = [item for sublist in y for item in sublist]
-    return flat, cuts if len(flat) > (len(cuts) + 1) else None
-
-# unflattens array
-def unflatten(y, cuts):
-    return np.split(y, cuts) if cuts else y
-
+from util import flatten, unflatten
 
 # labeler which handles missing labels
 class LabelEncoder(BaseEstimator, TransformerMixin):
