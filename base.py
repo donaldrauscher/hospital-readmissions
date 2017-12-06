@@ -64,12 +64,13 @@ class OneHotEncoder(BaseEstimator, TransformerMixin):
     def __init__(self, columns, label_encode_params = {}):
         self.columns = columns
         self.label_encode_params = label_encode_params
+        self.df_columns = None
         self.labellers = OrderedDict()
         self.feature_indices = None
 
     def fit(self, df, y = None):
         # split out categoricals
-        df2 = df[self.columns].copy()
+        df1, df2 = df.drop(labels = self.columns, axis = 1).copy(), df[self.columns].copy()
 
         # label encode categoricals
         for c in self.columns:
@@ -81,6 +82,12 @@ class OneHotEncoder(BaseEstimator, TransformerMixin):
         # set number of values / feature indices for each categorical
         n_values = [len(self.labellers[c].classes) for c in self.columns]
         self.feature_indices = np.hstack([[0], np.cumsum(n_values)])
+
+        # set columns
+        non_cat_col = list(df1.columns)
+        new_cat_col, _ = flatten([['is_%s_%s' % (k, i) for i in v.classes] for k,v in self.labellers.items()])
+        new_cat_col = [j for i,j in enumerate(new_cat_col) if i not in self.feature_indices[1:]-1]
+        self.df_columns = non_cat_col + new_cat_col
 
         return self
 
@@ -114,4 +121,6 @@ class OneHotEncoder(BaseEstimator, TransformerMixin):
         # combine
         df1.reset_index(inplace = True, drop = True)
         df2.reset_index(inplace = True, drop = True)
-        return pd.concat([df1, df2], axis = 1)
+        df = pd.concat([df1, df2], axis = 1)
+        assert(list(df.columns) == self.df_columns)
+        return df

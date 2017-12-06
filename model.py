@@ -77,13 +77,18 @@ train_pipeline = Pipeline(steps = [
 ])
 
 # grid search for hyperparameter tuning
+# param_grid = {
+#     'cat_encode__label_encode_params': [\
+#         {'diag' : {'top_n' : 100, 'min_support' : 0}},\
+#         {'diag' : {'top_n' : 200, 'min_support' : 0}},\
+#         {'diag' : {'top_n' : 300, 'min_support' : 0}}],
+#     'est__penalty': ['l1', 'l2'],
+#     'est__C': [0.01, 0.1, 1]
+# }
 param_grid = {
-    'cat_encode__label_encode_params': [\
-        {'diag' : {'top_n' : 100, 'min_support' : 0}},\
-        {'diag' : {'top_n' : 200, 'min_support' : 0}},\
-        {'diag' : {'top_n' : 300, 'min_support' : 0}}],
-    'est__penalty': ['l1', 'l2'],
-    'est__C': [0.01, 0.1, 1]
+    'cat_encode__label_encode_params': [{'diag' : {'top_n' : 200, 'min_support' : 0}}],
+    'est__penalty': ['l1'],
+    'est__C': [0.01]
 }
 
 gslr = GridSearchCV(train_pipeline, param_grid = param_grid, scoring = 'roc_auc', cv = 3, verbose = 1)
@@ -106,4 +111,10 @@ print('Confusion matrix:')
 print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int)))
 print('AUC: %s' % roc_auc_score(ydata_test, ydata_test_pred))
 
-# TODO: tornado plot with coefficients
+# importance scores
+features = train_pipeline.named_steps['cat_encode'].df_columns
+coef = train_pipeline.named_steps['est'].coef_[0]
+importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
+importance = importance.loc[importance.coef != 0,:]
+importance.sort_values(by = ['coef'], ascending = False, inplace = True)
+print(importance)
