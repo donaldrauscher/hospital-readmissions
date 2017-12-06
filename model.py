@@ -67,7 +67,7 @@ xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata
 
 # pipeline for training model
 cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id', \
-           'race', 'gender', 'age', 'payer_code', 'medical_specialty', 'diag']
+           'race', 'gender', 'payer_code', 'medical_specialty', 'diag']
 
 train_pipeline = Pipeline(steps = [
     ('cat_encode', OneHotEncoder(columns = cat_var)),

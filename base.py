@@ -13,7 +13,7 @@ def flatten(y):
     y = [i if isinstance(i, (np.ndarray, list, tuple)) else [i] for i in y]
     cuts = list(np.cumsum([len(i) for i in y])[:-1])
     flat = [item for sublist in y for item in sublist]
-    return flat, cuts if len(flat) > len(cuts) else None
+    return flat, cuts if len(flat) > (len(cuts) + 1) else None
 
 # unflattens array
 def unflatten(y, cuts):
@@ -51,7 +51,6 @@ class LabelEncoder(BaseEstimator, TransformerMixin):
         y = column_or_1d(y, warn=True)
         y2, y2_cuts = flatten(y)
 
-        # NOTE: do missing show up in 'other'?
         new_label = ~np.in1d(y2, self.classes_)
         labels = np.searchsorted(self.classes_, y2)
         labels[new_label] = len(self.classes_)
@@ -97,8 +96,7 @@ class OneHotEncoder(BaseEstimator, TransformerMixin):
         # create matrix with one hots
         n_row, n_col = len(df2), self.feature_indices[-1]
 
-        df2_flat = [np.array(flatten(x)[0]) for x in df2.values]
-        df2_flat = [x[~pd.isnull(x)] for x in df2_flat] # NOTE: don't need this if missing get put in 'other'
+        df2_flat = [flatten(x)[0] for x in df2.values]
 
         df2_col, _ = flatten(df2_flat)
         df2_row = np.repeat(np.arange(len(df2_flat)), [len(x) for x in df2_flat])
