@@ -10,9 +10,8 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 
 from xgboost import XGBClassifier
 
-from mlxtend.classifier import StackingClassifier
-
-from base import OneHotEncoder
+from stack import StackingClassifier
+from transform import OneHotEncoder
 from util import add_dict_prefix
 
 # import our data
@@ -81,25 +80,24 @@ feature_engineering = [
     ('scaler', StandardScaler())
 ]
 
-# TODO: extend StackingClassifier and allow it to take pipeline-like inputs
 model_stack = [
-    ('logisticregression', LogisticRegression()),
-    ('randomforestclassifier', RandomForestClassifier(random_state = 1)),
-    ('xgbclassifier', XGBClassifier(seed = 1))
+    ('lr', LogisticRegression()),
+    ('rf', RandomForestClassifier(random_state = 1)),
+    ('xgb', XGBClassifier(seed = 1))
 ]
 
-model_meta = LogisticRegression()
+model_meta = ('meta-lr', LogisticRegression(fit_intercept = False))
 
 param_grid = {
-    'logisticregression': {'penalty': ['l1'], 'C': [0.01]},
-    'randomforestclassifier': {'n_estimators': [100], 'max_depth': [5]},
-    'xgbclassifier': {'learning_rate': [0.1], 'max_depth': [5]}
+    'lr': {'penalty': ['l1'], 'C': [0.01]},
+    'rf': {'n_estimators': [100], 'max_depth': [5]},
+    'xgb': {'learning_rate': [0.1], 'max_depth': [5]}
 }
 
 # param_grid = {
-#     'logisticregression': {'penalty': ['l1', 'l2'], 'C': [0.01, 0.1, 1]},
-#     'randomforestclassifier': {'n_estimators': [10, 100], 'max_depth': [3, 5]},
-#     'xgbclassifier': {'learning_rate': [0.05, 0.1], 'max_depth': [3, 5]}
+#     'lr': {'penalty': ['l1', 'l2'], 'C': [0.01, 0.1, 1]},
+#     'rf': {'n_estimators': [10, 100], 'max_depth': [3, 5]},
+#     'xgb': {'learning_rate': [0.05, 0.1], 'max_depth': [3, 5]}
 # }
 
 # hyperparameter tuning with grid search for each model individually
@@ -110,7 +108,9 @@ for m in model_stack:
     pipeline = Pipeline(steps = feature_engineering + [m])
     param_grid_temp = add_dict_prefix(param_grid[model_name], model_name)
 
-    gslr = GridSearchCV(pipeline, param_grid = param_grid_temp, scoring = 'roc_auc', cv = 3, verbose = 1)
+    # TODO: Look into using randomized search CV to tune more efficiently
+    # http://scikit-learn.org/stable/auto_examples/model_selection/plot_randomized_search.html
+    gslr = GridSearchCV(pipeline, param_grid = param_grid_temp, scoring = 'roc_auc', cv = 3, n_jobs = 3, verbose = 1)
     gslr.fit(xdata_train, ydata_train)
     print('Best %s params: %s' % (model_name, str(gslr.best_params_)))
     print('Best %s params score: %s' % (model_name, str(gslr.best_score_)))
@@ -121,8 +121,8 @@ for m in model_stack:
 param_optimal = add_dict_prefix(param_optimal, 'stack')
 
 pipeline = Pipeline(steps = feature_engineering + \
-    [('stack', StackingClassifier(classifiers = [x[1] for x in model_stack],
-                                  meta_classifier = model_meta,
+    [('stack', StackingClassifier(classifiers = model_stack, \
+                                  meta_classifier = model_meta, \
                                   use_probas = True))])
 
 pipeline.set_params(**param_optimal)
