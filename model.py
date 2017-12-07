@@ -1,10 +1,12 @@
 import pandas as pd
 import numpy as np
 
+from scipy.stats import randint as sp_randint
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
 
@@ -80,42 +82,54 @@ feature_engineering = [
     ('scaler', StandardScaler())
 ]
 
+#TODO: add XGBoost and tuning
 model_stack = [
     ('lr', LogisticRegression()),
-    ('rf', RandomForestClassifier(random_state = 1)),
-    ('xgb', XGBClassifier(seed = 1))
+    ('rf', RandomForestClassifier(random_state = 1))#,
+    #('xgb', XGBClassifier(seed = 1))
 ]
 
 model_meta = ('meta-lr', LogisticRegression(fit_intercept = False))
 
+# hyperparameter tuning for each model individually
+tuning_constants = {'scoring': 'roc_auc', 'cv': 3, 'verbose': 1, 'refit': False}
+grid_search_tuning_arg = tuning_constants.copy()
+rand_search_tuning_arg = dict(tuning_constants, **{'random_state': 1, 'n_iter': 10})
+tuning_types = {'lr': GridSearchCV, 'rf': RandomizedSearchCV}
+
+def make_tuner(cls, pipeline, params):
+    kwarg = grid_search_tuning_arg if cls is GridSearchCV else rand_search_tuning_arg
+    return cls(pipeline, params, **kwarg)
+
 param_grid = {
-    'lr': {'penalty': ['l1'], 'C': [0.01]},
-    'rf': {'n_estimators': [100], 'max_depth': [5]},
-    'xgb': {'learning_rate': [0.1], 'max_depth': [5]}
+    'lr': {
+        'penalty': ['l1', 'l2'],
+        'C': [0.01, 0.1, 1]
+    },
+    'rf': {
+        'n_estimators': [100],
+        'max_depth': [3, None],
+        'max_features': sp_randint(1, 11),
+        'min_samples_split': sp_randint(2, 11),
+        'min_samples_leaf': sp_randint(1, 11),
+        'bootstrap': [True, False],
+        'criterion': ['gini', 'entropy']
+    }
 }
 
-# param_grid = {
-#     'lr': {'penalty': ['l1', 'l2'], 'C': [0.01, 0.1, 1]},
-#     'rf': {'n_estimators': [10, 100], 'max_depth': [3, 5]},
-#     'xgb': {'learning_rate': [0.05, 0.1], 'max_depth': [3, 5]}
-# }
-
-# hyperparameter tuning with grid search for each model individually
 param_optimal = {}
 for m in model_stack:
     model_name, model = m
 
     pipeline = Pipeline(steps = feature_engineering + [m])
-    param_grid_temp = add_dict_prefix(param_grid[model_name], model_name)
+    param_grid_model = add_dict_prefix(param_grid[model_name], model_name)
+    tuner = make_tuner(tuning_types[model_name], pipeline, param_grid_model)
 
-    # TODO: Look into using randomized search CV to tune more efficiently
-    # http://scikit-learn.org/stable/auto_examples/model_selection/plot_randomized_search.html
-    gslr = GridSearchCV(pipeline, param_grid = param_grid_temp, scoring = 'roc_auc', cv = 3, n_jobs = 3, verbose = 1)
-    gslr.fit(xdata_train, ydata_train)
-    print('Best %s params: %s' % (model_name, str(gslr.best_params_)))
-    print('Best %s params score: %s' % (model_name, str(gslr.best_score_)))
+    tuner.fit(xdata_train, ydata_train)
+    print('Best %s params: %s' % (model_name, str(tuner.best_params_)))
+    print('Best %s params score: %s' % (model_name, str(tuner.best_score_)))
 
-    param_optimal.update(gslr.best_params_)
+    param_optimal.update(tuner.best_params_)
 
 # build model stack
 param_optimal = add_dict_prefix(param_optimal, 'stack')
