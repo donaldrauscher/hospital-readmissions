@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
 
-from scipy.stats import randint as sp_randint
+from scipy.stats import randint
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
 from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
 
@@ -82,20 +82,20 @@ feature_engineering = [
     ('scaler', StandardScaler())
 ]
 
-#TODO: add XGBoost and tuning
 model_stack = [
     ('lr', LogisticRegression()),
-    ('rf', RandomForestClassifier(random_state = 1))#,
-    #('xgb', XGBClassifier(seed = 1))
+    ('rf', RandomForestClassifier(random_state = 1)),
+    ('xgb', XGBClassifier(seed = 1))
 ]
 
 model_meta = ('meta-lr', LogisticRegression(fit_intercept = False))
 
 # hyperparameter tuning for each model individually
-tuning_constants = {'scoring': 'roc_auc', 'cv': 3, 'verbose': 1, 'refit': False}
+ss = ShuffleSplit(n_splits = 5, train_size = 0.4, random_state = 1)
+tuning_constants = {'scoring': 'roc_auc', 'cv': ss, 'verbose': 1, 'refit': False}
 grid_search_tuning_arg = tuning_constants.copy()
-rand_search_tuning_arg = dict(tuning_constants, **{'random_state': 1, 'n_iter': 10})
-tuning_types = {'lr': GridSearchCV, 'rf': RandomizedSearchCV}
+rand_search_tuning_arg = dict(tuning_constants, **{'random_state': 1, 'n_iter': 20})
+tuning_types = {'lr': GridSearchCV, 'rf': RandomizedSearchCV, 'xgb': RandomizedSearchCV}
 
 def make_tuner(cls, pipeline, params):
     kwarg = grid_search_tuning_arg if cls is GridSearchCV else rand_search_tuning_arg
@@ -109,11 +109,19 @@ param_grid = {
     'rf': {
         'n_estimators': [100],
         'max_depth': [3, None],
-        'max_features': sp_randint(1, 11),
-        'min_samples_split': sp_randint(2, 11),
-        'min_samples_leaf': sp_randint(1, 11),
+        'max_features': randint(1, 10),
+        'min_samples_split': randint(2, 10),
+        'min_samples_leaf': randint(1, 10),
         'bootstrap': [True, False],
         'criterion': ['gini', 'entropy']
+    },
+    'xgb': {
+        'n_estimators': np.arange(1, 6) * 100,
+        'learning_rate': np.arange(2, 11) / 100.0,
+        'max_depth': np.arange(2, 6) * 2,
+        'min_child_weight': randint(1, 10),
+        'subsample': [0.5, 0.75, 1],
+        'colsample_bytree': [0.5, 0.75, 1]
     }
 }
 
