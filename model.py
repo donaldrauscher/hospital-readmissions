@@ -4,17 +4,18 @@ import numpy as np
 from scipy.stats import randint
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
 from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
+from sklearn.utils.validation import check_is_fitted
+from sklearn.exceptions import NotFittedError
 
 from xgboost import XGBClassifier
 
-from stack import StackingClassifier
 from transform import OneHotEncoder
-from util import add_dict_prefix
+from util import add_dict_prefix, stars_and_bars
 
 # import our data
 admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
@@ -88,10 +89,10 @@ model_stack = [
     ('xgb', XGBClassifier(seed = 1))
 ]
 
-model_meta = ('meta-lr', LogisticRegression(fit_intercept = False))
+model_stack = [(m[0], Pipeline(steps = feature_engineering + [m])) for m in model_stack]
 
 # hyperparameter tuning for each model individually
-ss = ShuffleSplit(n_splits = 5, train_size = 0.4, random_state = 1)
+ss = ShuffleSplit(n_splits = 5, train_size = 0.25, random_state = 1)
 tuning_constants = {'scoring': 'roc_auc', 'cv': ss, 'verbose': 1, 'refit': False}
 grid_search_tuning_arg = tuning_constants.copy()
 rand_search_tuning_arg = dict(tuning_constants, **{'random_state': 1, 'n_iter': 20})
@@ -127,37 +128,60 @@ param_grid = {
 
 param_optimal = {}
 for m in model_stack:
-    model_name, model = m
-
-    pipeline = Pipeline(steps = feature_engineering + [m])
+    # create tuner
+    model_name, pipeline = m
     param_grid_model = add_dict_prefix(param_grid[model_name], model_name)
     tuner = make_tuner(tuning_types[model_name], pipeline, param_grid_model)
 
+    # use tuner to determine optimal params
     tuner.fit(xdata_train, ydata_train)
     print('Best %s params: %s' % (model_name, str(tuner.best_params_)))
     print('Best %s params score: %s' % (model_name, str(tuner.best_score_)))
 
-    param_optimal.update(tuner.best_params_)
+    # save best params
+    new_param_optimal = add_dict_prefix(add_dict_prefix(tuner.best_params_, model_name), model_name)
+    param_optimal.update(**new_param_optimal)
 
-# build model stack
-param_optimal = add_dict_prefix(param_optimal, 'stack')
+# param_optimal = {
+#     'lr__lr__penalty': 'l1',
+#     'lr__lr__C': 0.01,
+#     'rf__rf__n_estimators': 100,
+#     'rf__rf__max_depth': None,
+#     'rf__rf__max_features': 9,
+#     'rf__rf__min_samples_split': 5,
+#     'rf__rf__min_samples_leaf': 8,
+#     'rf__rf__bootstrap': False,
+#     'rf__rf__criterion': 'entropy',
+#     'xgb__xgb__n_estimators': 200,
+#     'xgb__xgb__learning_rate': 0.02,
+#     'xgb__xgb__max_depth': 4,
+#     'xgb__xgb__min_child_weight': 8,
+#     'xgb__xgb__subsample': 0.75,
+#     'xgb__xgb__colsample_bytree': 1
+# }
 
-pipeline = Pipeline(steps = feature_engineering + \
-    [('stack', StackingClassifier(classifiers = model_stack, \
-                                  meta_classifier = model_meta, \
-                                  use_probas = True))])
+# build model stack with voting classifier
+ensemble = VotingClassifier(estimators = model_stack, voting = "soft")
+ensemble.set_params(**param_optimal)
+ensemble.fit(xdata_train, ydata_train)
 
-pipeline.set_params(**param_optimal)
-pipeline.fit(xdata_train, ydata_train)
+weights = [[j/10.0 for j in i] for i in stars_and_bars(len(model_stack), 10)]
+scores = []
+for w in weights:
+    ensemble.weights = w
+    ydata_test_pred = ensemble.predict_proba(xdata_test)[:,1]
+    auc = roc_auc_score(ydata_test, ydata_test_pred)
+    scores.append(auc)
 
-# see how model is blending
-model_names = [x[0] for x in model_stack]
-model_coef = pipeline.named_steps['stack'].meta_clf_.coef_[0]
-blend = dict(zip(model_names, model_coef))
-print(blend)
+optimal_weights = weights[np.argmax(scores)]
+print("Optimal ensemble weights: %s" % str(optimal_weights))
+print("Optimal ensemble weights score: %s" % str(np.max(scores)))
+param_optimal['weights'] = optimal_weights
+ensemble.set_params(**param_optimal)
+ensemble.fit(xdata_train, ydata_train)
 
 # make predictions for our test set
-ydata_test_pred = pipeline.predict_proba(xdata_test)[:,1]
+ydata_test_pred = ensemble.predict_proba(xdata_test)[:,1]
 
 # determine cutoff balancing precision/recall
 precision, recall, threshold = precision_recall_curve(ydata_test, ydata_test_pred)
@@ -168,8 +192,9 @@ print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int
 print('AUC: %s' % roc_auc_score(ydata_test, ydata_test_pred))
 
 # importance scores (from logistic regression)
-features = pipeline.named_steps['cat_encode'].df_columns
-coef = pipeline.named_steps['stack'].clfs_[0].coef_[0]
+lr_model = ensemble.estimators_[0]
+features = lr_model.named_steps['cat_encode'].df_columns
+coef = lr_model.named_steps['lr'].coef_[0]
 importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
 importance = importance.loc[importance.coef != 0,:]
 importance.sort_values(by = ['coef'], ascending = False, inplace = True)
