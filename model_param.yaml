@@ -1,0 +1,15 @@
+lr__lr__C: 0.01
+lr__lr__penalty: l1
+rf__rf__bootstrap: false
+rf__rf__criterion: entropy
+rf__rf__max_depth: null
+rf__rf__max_features: 8
+rf__rf__min_samples_leaf: 5
+rf__rf__min_samples_split: 5
+rf__rf__n_estimators: 100
+xgb__xgb__colsample_bytree: 1
+xgb__xgb__learning_rate: 0.02
+xgb__xgb__max_depth: 8
+xgb__xgb__min_child_weight: 8
+xgb__xgb__n_estimators: 200
+xgb__xgb__subsample: 0.75

@@ -1,3 +1,5 @@
+import yaml
+
 import pandas as pd
 import numpy as np
 
@@ -9,8 +11,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
 from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
-from sklearn.utils.validation import check_is_fitted
-from sklearn.exceptions import NotFittedError
 
 from xgboost import XGBClassifier
 
@@ -117,48 +117,37 @@ param_grid = {
         'criterion': ['gini', 'entropy']
     },
     'xgb': {
-        'n_estimators': np.arange(1, 6) * 100,
-        'learning_rate': np.arange(2, 11) / 100.0,
-        'max_depth': np.arange(2, 6) * 2,
+        'n_estimators': list(np.arange(1, 6) * 100),
+        'learning_rate': list(np.arange(2, 11) / 100.0),
+        'max_depth': list(np.arange(2, 6) * 2),
         'min_child_weight': randint(1, 10),
         'subsample': [0.5, 0.75, 1],
         'colsample_bytree': [0.5, 0.75, 1]
     }
 }
 
-param_optimal = {}
-for m in model_stack:
-    # create tuner
-    model_name, pipeline = m
-    param_grid_model = add_dict_prefix(param_grid[model_name], model_name)
-    tuner = make_tuner(tuning_types[model_name], pipeline, param_grid_model)
+try:
+    with open('model_param.yaml', 'r') as f:
+        param_optimal = yaml.load(f)
+except IOError:
+    param_optimal = {}
 
-    # use tuner to determine optimal params
-    tuner.fit(xdata_train, ydata_train)
-    print('Best %s params: %s' % (model_name, str(tuner.best_params_)))
-    print('Best %s params score: %s' % (model_name, str(tuner.best_score_)))
+    for m in model_stack:
+        # create tuner
+        model_name, pipeline = m
+        param_grid_model = add_dict_prefix(param_grid[model_name], model_name)
+        tuner = make_tuner(tuning_types[model_name], pipeline, param_grid_model)
 
-    # save best params
-    new_param_optimal = add_dict_prefix(add_dict_prefix(tuner.best_params_, model_name), model_name)
-    param_optimal.update(**new_param_optimal)
+        # use tuner to determine optimal params
+        tuner.fit(xdata_train, ydata_train)
+        print('Best %s params: %s' % (model_name, str(tuner.best_params_)))
+        print('Best %s params score: %s' % (model_name, str(tuner.best_score_)))
 
-# param_optimal = {
-#     'lr__lr__penalty': 'l1',
-#     'lr__lr__C': 0.01,
-#     'rf__rf__n_estimators': 100,
-#     'rf__rf__max_depth': None,
-#     'rf__rf__max_features': 9,
-#     'rf__rf__min_samples_split': 5,
-#     'rf__rf__min_samples_leaf': 8,
-#     'rf__rf__bootstrap': False,
-#     'rf__rf__criterion': 'entropy',
-#     'xgb__xgb__n_estimators': 200,
-#     'xgb__xgb__learning_rate': 0.02,
-#     'xgb__xgb__max_depth': 4,
-#     'xgb__xgb__min_child_weight': 8,
-#     'xgb__xgb__subsample': 0.75,
-#     'xgb__xgb__colsample_bytree': 1
-# }
+        # save best params
+        param_optimal.update(**add_dict_prefix(tuner.best_params_, model_name))
+
+    with open('model_param.yaml', 'w') as f:
+        yaml.dump(param_optimal, f)
 
 # build model stack with voting classifier
 ensemble = VotingClassifier(estimators = model_stack, voting = "soft")
