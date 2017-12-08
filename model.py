@@ -178,7 +178,17 @@ pos_threshold = np.min(threshold[precision[1:] > recall[:-1]])
 print('Positive threshold: %s' % str(pos_threshold))
 print('Confusion matrix:')
 print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int)))
-print('AUC: %s' % roc_auc_score(ydata_test, ydata_test_pred))
+
+# ensemble versus individual models
+weights2 = [('Ensemble', optimal_weights),
+            ('Avg', [1,1,1]),
+            ('LR', [1,0,0]),
+            ('RF', [0,1,0]),
+            ('XGB', [0,0,1])]
+
+for model_name, w in weights2:
+    ensemble.weights = w
+    print('%s AUC: %s' % (model_name, roc_auc_score(ydata_test, ensemble.predict_proba(xdata_test)[:,1])))
 
 # importance scores (from logistic regression)
 lr_model = ensemble.estimators_[0]
