@@ -6,7 +6,7 @@ import numpy as np
 from scipy.stats import randint
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
 from sklearn.preprocessing import Imputer, StandardScaler
@@ -15,6 +15,7 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 from xgboost import XGBClassifier
 
 from transform import OneHotEncoder
+from voting_classifier_weights import VotingClassifierWeightTune
 from util import add_dict_prefix, stars_and_bars
 
 # import our data
@@ -150,24 +151,11 @@ except IOError:
         yaml.dump(param_optimal, f)
 
 # build model stack with voting classifier
-ensemble = VotingClassifier(estimators = model_stack, voting = "soft")
+ensemble = VotingClassifierWeightTune(estimators = model_stack, scoring = "roc_auc")
 ensemble.set_params(**param_optimal)
 ensemble.fit(xdata_train, ydata_train)
-
-weights = [[j/10.0 for j in i] for i in stars_and_bars(len(model_stack), 10)]
-scores = []
-for w in weights:
-    ensemble.weights = w
-    ydata_test_pred = ensemble.predict_proba(xdata_test)[:,1]
-    auc = roc_auc_score(ydata_test, ydata_test_pred)
-    scores.append(auc)
-
-optimal_weights = weights[np.argmax(scores)]
+optimal_weights = ensemble.weights
 print("Optimal ensemble weights: %s" % str(optimal_weights))
-print("Optimal ensemble weights score: %s" % str(np.max(scores)))
-param_optimal['weights'] = optimal_weights
-ensemble.set_params(**param_optimal)
-ensemble.fit(xdata_train, ydata_train)
 
 # make predictions for our test set
 ydata_test_pred = ensemble.predict_proba(xdata_test)[:,1]
@@ -180,18 +168,18 @@ print('Confusion matrix:')
 print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int)))
 
 # ensemble versus individual models
-weights2 = [('Ensemble', optimal_weights),
+model_weights = [('Ensemble', optimal_weights),
             ('Avg', [1,1,1]),
             ('LR', [1,0,0]),
             ('RF', [0,1,0]),
             ('XGB', [0,0,1])]
 
-for model_name, w in weights2:
+for model_name, w in model_weights:
     ensemble.weights = w
     print('%s AUC: %s' % (model_name, roc_auc_score(ydata_test, ensemble.predict_proba(xdata_test)[:,1])))
 
 # importance scores (from logistic regression)
-lr_model = ensemble.estimators_[0]
+lr_model = ensemble.voter.estimators_[0]
 features = lr_model.named_steps['cat_encode'].df_columns
 coef = lr_model.named_steps['lr'].coef_[0]
 importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
