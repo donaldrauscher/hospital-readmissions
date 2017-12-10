@@ -60,7 +60,7 @@ class ScoreEstPassThru(object):
         self.y_label_encoder = y_label_encoder
 
     def predict(self, X):
-        check_is_fitted(self.y_label_encoder)
+        check_is_fitted(self.y_label_encoder, 'classes_')
         maj = np.argmax(X, axis = 1)
         maj = self.y_label_encoder.inverse_transform(maj)
         return maj
