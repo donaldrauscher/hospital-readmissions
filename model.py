@@ -15,7 +15,7 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 from xgboost import XGBClassifier
 
 from transform import OneHotEncoder
-from voting_classifier_weights import VotingClassifierWeightTune
+from voting_classifier import VotingClassifierWeightTune
 from util import add_dict_prefix, stars_and_bars
 
 # import our data
