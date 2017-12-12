@@ -15,7 +15,7 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 from xgboost import XGBClassifier
 
 from transform import OneHotEncoder
-from voting_classifier import VotingClassifierWeightTune
+from stack import StackingClassifier
 from util import add_dict_prefix, stars_and_bars
 
 # import our data
@@ -151,14 +151,12 @@ except IOError:
         yaml.dump(param_optimal, f)
 
 # build model stack with voting classifier
-ensemble = VotingClassifierWeightTune(estimators = model_stack, scoring = "roc_auc")
-ensemble.set_params(**param_optimal)
-ensemble.fit(xdata_train, ydata_train)
-optimal_weights = ensemble.weights
-print("Optimal ensemble weights: %s" % str(optimal_weights))
+stack = StackingClassifier(classifiers = model_stack)
+stack.set_params(**add_dict_prefix(param_optimal, 'stack'))
+stack.fit(xdata_train, ydata_train)
 
 # make predictions for our test set
-ydata_test_pred = ensemble.predict_proba(xdata_test)[:,1]
+ydata_test_pred = stack.predict_proba(xdata_test)[:,1]
 
 # determine cutoff balancing precision/recall
 precision, recall, threshold = precision_recall_curve(ydata_test, ydata_test_pred)
@@ -166,20 +164,21 @@ pos_threshold = np.min(threshold[precision[1:] > recall[:-1]])
 print('Positive threshold: %s' % str(pos_threshold))
 print('Confusion matrix:')
 print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int)))
+print('Stack AUC: %s', roc_auc_score(ydata_test, ydata_test_pred))
 
 # ensemble versus individual models
-model_weights = [('Ensemble', optimal_weights),
-            ('Avg', [1,1,1]),
-            ('LR', [1,0,0]),
-            ('RF', [0,1,0]),
-            ('XGB', [0,0,1])]
+pred = []
+for m in stack.named_steps['stack'].transformer_list:
+    model_name, model = m
+    pred_i = model.transform(xdata_test)
+    pred.append(pred_i)
+    print('%s AUC: %s' % (model_name.upper(), roc_auc_score(ydata_test, pred_i)))
 
-for model_name, w in model_weights:
-    ensemble.weights = w
-    print('%s AUC: %s' % (model_name, roc_auc_score(ydata_test, ensemble.predict_proba(xdata_test)[:,1])))
+avg_pred = np.average(pred, axis = 0)
+print('Avg AUC: %s' % roc_auc_score(ydata_test, avg_pred))
 
 # importance scores (from logistic regression)
-lr_model = ensemble.voter.estimators_[0]
+lr_model = stack.named_steps['stack'].transformer_list[0][1]
 features = lr_model.named_steps['cat_encode'].df_columns
 coef = lr_model.named_steps['lr'].coef_[0]
 importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
