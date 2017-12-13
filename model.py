@@ -16,7 +16,7 @@ from xgboost import XGBClassifier
 
 from transform import OneHotEncoder
 from stack import StackingClassifier
-from util import add_dict_prefix, stars_and_bars
+from util import add_dict_prefix
 
 # import our data
 admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
@@ -85,9 +85,9 @@ feature_engineering = [
 ]
 
 model_stack = [
-    ('lr', LogisticRegression()),
-    ('rf', RandomForestClassifier(random_state = 1)),
-    ('xgb', XGBClassifier(seed = 1))
+    ('lr', LogisticRegression(class_weight = "balanced")),
+    ('rf', RandomForestClassifier(random_state = 1, class_weight = "balanced")),
+    ('xgb', XGBClassifier(seed = 1, scale_pos_weight = (1 / np.mean(ydata_train) - 1)))
 ]
 
 model_stack = [(m[0], Pipeline(steps = feature_engineering + [m])) for m in model_stack]
@@ -164,7 +164,7 @@ pos_threshold = np.min(threshold[precision[1:] > recall[:-1]])
 print('Positive threshold: %s' % str(pos_threshold))
 print('Confusion matrix:')
 print(confusion_matrix(ydata_test, (ydata_test_pred >= pos_threshold).astype(int)))
-print('Stack AUC: %s', roc_auc_score(ydata_test, ydata_test_pred))
+print('Stack AUC: %s' % roc_auc_score(ydata_test, ydata_test_pred))
 
 # ensemble versus individual models
 pred = []
