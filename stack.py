@@ -1,7 +1,7 @@
 import numpy as np
 
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.preprocessing import FunctionTransformer
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 from sklearn.model_selection import cross_val_predict
 from sklearn.linear_model import LogisticRegression
 
@@ -25,6 +25,7 @@ def add_transform(classifiers):
 def default_meta_classifier():
     return Pipeline([
         ('logit', FunctionTransformer(logit)),
+        ('scaler', StandardScaler()),
         ('lr', LogisticRegression())
     ])
 
@@ -34,10 +35,7 @@ class StackingClassifier(Pipeline):
     def __init__(self, classifiers, meta_classifier = None, cv = 3):
         add_transform(classifiers)
         self.classifiers = FeatureUnion(classifiers)
-        if meta_classifier:
-            self.meta_classifier = meta_classifier
-        else:
-            self.meta_classifier = default_meta_classifier()
+        self.meta_classifier = meta_classifier if meta_classifier else default_meta_classifier()
         self.cv = cv
         self.steps = [('stack', self.classifiers), ('meta', self.meta_classifier)]
         self.memory = None
