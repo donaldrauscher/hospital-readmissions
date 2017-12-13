@@ -3,6 +3,7 @@ backports.shutil-get-terminal-size==1.0.0
 certifi==2017.11.5
 decorator==4.1.2
 enum34==1.1.6
+imbalanced-learn==0.3.2
 ipykernel==4.6.1
 ipython==5.5.0
 ipython-genutils==0.2.0
@@ -18,6 +19,7 @@ ptyprocess==0.5.2
 Pygments==2.2.0
 python-dateutil==2.6.1
 pytz==2017.3
+PyYAML==3.12
 pyzmq==16.0.3
 scandir==1.6
 scikit-learn==0.19.1
