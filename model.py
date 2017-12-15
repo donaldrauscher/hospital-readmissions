@@ -69,12 +69,12 @@ admit['readmitted'] = admit.readmitted.apply(lambda x: 1 if x == '<30' else 0)
 drop_var = ['encounter_id', 'patient_nbr', 'diag_1', 'diag_2', 'diag_3']
 admit.drop(labels = drop_var, axis = 1, inplace = True)
 
-# train, test, validate split
+# train / test split
 xdata = admit.drop(labels = ['readmitted'], axis = 1)
 ydata = admit.readmitted
 xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata, test_size = 0.2, random_state = 1)
 
-# pipeline for training model
+# set up pipelines
 cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id', \
            'race', 'gender', 'payer_code', 'medical_specialty', 'diag']
 
@@ -150,7 +150,7 @@ except IOError:
     with open('model_param.yaml', 'w') as f:
         yaml.dump(param_optimal, f)
 
-# build model stack with voting classifier
+# build model stack
 stack = StackingClassifier(classifiers = model_stack)
 stack.set_params(**add_dict_prefix(param_optimal, 'stack'))
 stack.fit(xdata_train, ydata_train)
