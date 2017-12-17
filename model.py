@@ -14,10 +14,10 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 
 from xgboost import XGBClassifier
 
-from transform import OneHotEncoder
-from high_card_cat import HCCEncoder
-from stack import StackingClassifier
-from util import add_dict_prefix, get_first
+from skl.onehot import OneHotEncoder
+from skl.hcc import HCCEncoder
+from skl.stack import StackingClassifier
+from skl.util import add_dict_prefix, get_first
 
 # import our data
 admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
