@@ -15,3 +15,10 @@ def unflatten(y, cuts):
 # add prefix to keys in a dictionary
 def add_dict_prefix(x, px):
     return {'%s__%s' % (px, k) : v for k,v in x.items()}
+
+# gets the first element in array if exists
+def get_first(x):
+    try:
+        return x[0]
+    except IndexError:
+        pass

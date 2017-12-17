@@ -9,14 +9,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
-from sklearn.preprocessing import Imputer, StandardScaler
+from sklearn.preprocessing import Imputer, StandardScaler, FunctionTransformer
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
 
 from xgboost import XGBClassifier
 
 from transform import OneHotEncoder
+from high_card_cat import HCCEncoder
 from stack import StackingClassifier
-from util import add_dict_prefix
+from util import add_dict_prefix, get_first
 
 # import our data
 admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
@@ -61,6 +62,7 @@ admit = directional_encode(admit, 'age', make_range(0, 100, 10))
 diag = admit[['diag_1', 'diag_2', 'diag_3']].values
 diag = [x[~pd.isnull(x)] for x in diag]
 admit['diag'] = pd.Series(diag)
+admit['diag_first'] = pd.Series([get_first(x) for x in diag])
 
 # encode our y variable
 admit['readmitted'] = admit.readmitted.apply(lambda x: 1 if x == '<30' else 0)
@@ -78,19 +80,29 @@ xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata
 cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id', \
            'race', 'gender', 'payer_code', 'medical_specialty', 'diag']
 
-feature_engineering = [
-    ('cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
+hcc_cat_var = ['diag_first']
+
+fe1 = [
+    ('onehot_cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
+    ('hcc_cat_encode', HCCEncoder(columns = hcc_cat_var, hcc_encode_params = {'diag_first' : {'add_noise' : False}})),
+    ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
+    ('scaler', StandardScaler())
+]
+
+fe2 = [
+    ('hcc_filter', FunctionTransformer(lambda X: X.drop(labels = hcc_cat_var, axis = 1), validate = False)),
+    ('onehot_cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
     ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
     ('scaler', StandardScaler())
 ]
 
 model_stack = [
-    ('lr', LogisticRegression(class_weight = "balanced")),
-    ('rf', RandomForestClassifier(random_state = 1, class_weight = "balanced")),
-    ('xgb', XGBClassifier(seed = 1, scale_pos_weight = (1 / np.mean(ydata_train) - 1)))
+    fe1 + [('lr', LogisticRegression(class_weight = "balanced"))],
+    fe2 + [('rf', RandomForestClassifier(random_state = 1, class_weight = "balanced"))],
+    fe2 + [('xgb', XGBClassifier(seed = 1, scale_pos_weight = (1 / np.mean(ydata_train) - 1)))]
 ]
 
-model_stack = [(m[0], Pipeline(steps = feature_engineering + [m])) for m in model_stack]
+model_stack = [(m[-1][0], Pipeline(steps = m)) for m in model_stack]
 
 # hyperparameter tuning for each model individually
 ss = ShuffleSplit(n_splits = 5, train_size = 0.25, random_state = 1)
@@ -118,9 +130,9 @@ param_grid = {
         'criterion': ['gini', 'entropy']
     },
     'xgb': {
-        'n_estimators': list(np.arange(1, 6) * 100),
-        'learning_rate': list(np.arange(2, 11) / 100.0),
-        'max_depth': list(np.arange(2, 6) * 2),
+        'n_estimators': (np.arange(1, 6) * 100).tolist(),
+        'learning_rate': (np.arange(2, 11) / 100.0).tolist(),
+        'max_depth': (np.arange(2, 6) * 2).tolist(),
         'min_child_weight': randint(1, 10),
         'subsample': [0.5, 0.75, 1],
         'colsample_bytree': [0.5, 0.75, 1]
@@ -179,7 +191,7 @@ print('Avg AUC: %s' % roc_auc_score(ydata_test, avg_pred))
 
 # importance scores (from logistic regression)
 lr_model = stack.named_steps['stack'].transformer_list[0][1]
-features = lr_model.named_steps['cat_encode'].df_columns
+features = lr_model.named_steps['onehot_cat_encode'].df_columns
 coef = lr_model.named_steps['lr'].coef_[0]
 importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
 importance = importance.loc[importance.coef != 0,:]
