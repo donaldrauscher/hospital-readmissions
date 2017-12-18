@@ -19,7 +19,7 @@ def add_transform(classifiers):
             classifier = classifier.steps[-1][-1]
         classifier.transform = chop_col0(classifier.predict_proba)
         classifier.__class__.transform = chop_col0(classifier.__class__.predict_proba)
-        # NOTE: need to add to class so `clone` in cross_val_predict` works
+        # NOTE: need to add to class so `clone` in `cross_val_predict` works
 
 # default function applies logit to probabilies and applies logistic regression
 def default_meta_classifier():
