@@ -65,11 +65,6 @@ class SingleHCCEncoder(BaseEstimator):
         self.fit_beta()
         return self
 
-    @np.vectorize
-    def transform_one_loo(self, x, y):
-        xval = self.df_dict.get(x, dict(k = 0, n = 0))
-        return (xval['k'] + self.a - y) * 1.0 / (xval['n'] + self.a + self.b - 1)
-
     def fit_transform(self, x, y):
         self.fit(x, y)
         if self.add_noise:
