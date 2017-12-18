@@ -39,7 +39,7 @@ class SingleHCCEncoder(BaseEstimator):
         mle = minimize(fun = betabinom_ll, args = [k, n], **self.mle_params)
         self.a, self.b = mle.x
 
-    # calibrate a and b
+    # descriptive stats for each level
     def fit_df(self, x, y):
         df = pd.DataFrame(data = dict(x = x, y = y))
         df = df.groupby(['x']).agg(['sum', 'count', 'mean'])
