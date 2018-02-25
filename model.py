@@ -86,19 +86,15 @@ cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id
 hcc_cat_var = ['diag_first']
 
 fe1 = [
-    ('onehot_cat_encode', OneHotEncoder(columns = cat_var, transformer_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
-    ('hcc_cat_encode', HCCEncoder(columns = hcc_cat_var, transformer_params = {'diag_first' : {'add_noise' : False}}))#,
-    #('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
-    #('scaler', StandardScaler())
+    ('one_hot', OneHotEncoder(columns = cat_var, transformer_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
+    ('hcc', HCCEncoder(columns = hcc_cat_var, transformer_params = {'diag_first' : {'add_noise' : False}})),
+    ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
+    ('scaler', StandardScaler())
 ]
 
-fe1 = Pipeline(steps = fe1)
-test = fe1.fit_transform(xdata_train, ydata_train)
-
-
 fe2 = [
-    ('hcc_filter', FunctionTransformer(lambda X: X.drop(labels = hcc_cat_var, axis = 1), validate = False)),
-    ('onehot_cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
+    ('filter', FunctionTransformer(lambda X: X.drop(labels = hcc_cat_var, axis = 1), validate = False)),
+    ('one_hot', OneHotEncoder(columns = cat_var, transformer_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
     ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
     ('scaler', StandardScaler())
 ]
@@ -198,7 +194,7 @@ print('Avg AUC: %s' % roc_auc_score(ydata_test, avg_pred))
 
 # importance scores (from logistic regression)
 lr_model = stack.named_steps['stack'].transformer_list[0][1]
-features = lr_model.named_steps['onehot_cat_encode'].df_columns
+features = lr_model.named_steps['hcc'].df_columns
 coef = lr_model.named_steps['lr'].coef_[0]
 importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
 importance = importance.loc[importance.coef != 0,:]
