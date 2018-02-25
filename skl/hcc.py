@@ -22,8 +22,8 @@ def betabinom_ll(par, arg):
 # default params for MLE
 mle_param_defaults = dict(method = "L-BFGS-B", x0 = [1,1], bounds = [(0.5, 500), (0.5, 500)])
 
-# encodes single high cardinality categorical variable
-class SingleHCCEncoder(BaseEstimator):
+# encodes high cardinality categorical variable
+class HCCEncoder(BaseEstimator):
 
     def __init__(self, add_noise = True, noise_sd = 0.05, mle_params = mle_param_defaults):
         self.add_noise = add_noise
@@ -77,36 +77,3 @@ class SingleHCCEncoder(BaseEstimator):
         check_is_fitted(self, 'df_dict')
         x = column_or_1d(x)
         return self.transform_one(self, x)
-
-# encodes multiple high cardinality categorical variables
-class HCCEncoder(BaseEstimator):
-
-    def __init__(self, columns, hcc_encode_params = {}, seed = 1):
-        self.columns = columns
-        self.hcc_encode_params = hcc_encode_params
-        self.seed = seed
-        self.labellers = {}
-
-    def fit(self, df, y):
-        for c in self.columns:
-            hcc_encode_params = self.hcc_encode_params.get(c, {})
-            labeller = SingleHCCEncoder(**hcc_encode_params)
-            labeller.fit(df[c], y)
-            self.labellers[c] = labeller
-        return self
-
-    def fit_transform(self, df, y):
-        np.random.seed(self.seed)
-        df = df.copy()
-        for c in self.columns:
-            hcc_encode_params = self.hcc_encode_params.get(c, {})
-            labeller = SingleHCCEncoder(**hcc_encode_params)
-            df[c] = labeller.fit_transform(df[c], y)
-            self.labellers[c] = labeller
-        return df
-
-    def transform(self, df):
-        df = df.copy()
-        for c in self.columns:
-            df[c] = self.labellers[c].transform(df[c])
-        return df

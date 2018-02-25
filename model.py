@@ -14,10 +14,14 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 
 from xgboost import XGBClassifier
 
+from skl.column_transformer import ColumnTransformer
 from skl.onehot import OneHotEncoder
 from skl.hcc import HCCEncoder
 from skl.stack import StackingClassifier
 from skl.util import add_dict_prefix, get_first
+
+# set random seed
+np.random.seed(1)
 
 # import our data
 admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
@@ -84,10 +88,14 @@ hcc_cat_var = ['diag_first']
 
 fe1 = [
     ('onehot_cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
-    ('hcc_cat_encode', HCCEncoder(columns = hcc_cat_var, hcc_encode_params = {'diag_first' : {'add_noise' : False}})),
-    ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
-    ('scaler', StandardScaler())
+    ('hcc_cat_encode', ColumnTransformer(columns = hcc_cat_var, transformer = HCCEncoder, transformer_params = {'diag_first' : {'add_noise' : False}}))#,
+    #('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
+    #('scaler', StandardScaler())
 ]
+
+fe1 = Pipeline(steps = fe1)
+test = fe1.fit_transform(xdata_train, ydata_train)
+
 
 fe2 = [
     ('hcc_filter', FunctionTransformer(lambda X: X.drop(labels = hcc_cat_var, axis = 1), validate = False)),
