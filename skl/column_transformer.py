@@ -22,8 +22,8 @@ class ColumnTransformer(FeatureUnion):
         # create transformer list
         transformer_list = [('other_col', ColumnFeedThrough(columns))]
         for c in columns:
-            transformer_params = transformer_params.get(c, {})
-            transformer_c = transformer(**transformer_params)
+            transformer_params_c = transformer_params.get(c, {})
+            transformer_c = transformer(**transformer_params_c)
             transformer_list.append((c, transformer_c))
 
         # set
