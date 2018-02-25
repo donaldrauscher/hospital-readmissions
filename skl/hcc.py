@@ -8,6 +8,9 @@ from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_is_fitted, column_or_1d
 from sklearn.utils.multiclass import type_of_target
 
+from skl.column_transformer import ColumnTransformer
+
+
 # beta binomial density function
 @np.vectorize
 def dbetabinom(a, b, k, n):
@@ -22,8 +25,9 @@ def betabinom_ll(par, arg):
 # default params for MLE
 mle_param_defaults = dict(method = "L-BFGS-B", x0 = [1,1], bounds = [(0.5, 500), (0.5, 500)])
 
+
 # encodes high cardinality categorical variable
-class HCCEncoder(BaseEstimator):
+class HCCEncoderBase(BaseEstimator):
 
     def __init__(self, add_noise = True, noise_sd = 0.05, mle_params = mle_param_defaults):
         self.add_noise = add_noise
@@ -77,3 +81,15 @@ class HCCEncoder(BaseEstimator):
         check_is_fitted(self, 'df_dict')
         x = column_or_1d(x)
         return self.transform_one(self, x)
+
+
+# one-hot encoder
+class HCCEncoder(ColumnTransformer):
+
+    def __init__(self, columns, transformer_params = {}, n_jobs = 1, pandas_out = True):
+        super(HCCEncoder, self).__init__(columns = columns,
+                                         transformer = HCCEncoderBase,
+                                         transformer_params = transformer_params,
+                                         n_jobs = n_jobs,
+                                         multi_col = False,
+                                         pandas_out = pandas_out)

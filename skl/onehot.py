@@ -7,6 +7,9 @@ from sklearn.utils.validation import check_is_fitted, column_or_1d
 
 from util import flatten, unflatten
 
+from skl.column_transformer import ColumnTransformer
+
+
 # labeler which handles missing labels
 class LabelEncoder(BaseEstimator, TransformerMixin):
 
@@ -45,8 +48,8 @@ class LabelEncoder(BaseEstimator, TransformerMixin):
         return unflatten(labels, y2_cuts)
 
 
-# does one-hot encoder for a single column
-class OneHotEncoder(BaseEstimator, TransformerMixin):
+# one-hot encoder for a single column
+class OneHotEncoderBase(BaseEstimator, TransformerMixin):
 
     def __init__(self, label_encoder_params = {}):
         self.label_encoder = LabelEncoder(**label_encoder_params)
@@ -72,3 +75,14 @@ class OneHotEncoder(BaseEstimator, TransformerMixin):
 
     def get_feature_names(self):
         return self.label_encoder.classes[:-1]
+
+
+# one-hot encoder
+class OneHotEncoder(ColumnTransformer):
+
+    def __init__(self, columns, transformer_params = {}, n_jobs = 1, pandas_out = True):
+        super(OneHotEncoder, self).__init__(columns = columns,
+                                            transformer = OneHotEncoderBase,
+                                            transformer_params = transformer_params,
+                                            multi_col = True,
+                                            pandas_out = pandas_out)
