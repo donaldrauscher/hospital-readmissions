@@ -87,7 +87,7 @@ cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id
 hcc_cat_var = ['diag_first']
 
 fe1 = [
-    ('onehot_cat_encode', OneHotEncoder(columns = cat_var, label_encode_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
+    ('onehot_cat_encode', ColumnTransformer(columns = cat_var, transformer = OneHotEncoder, transformer_params = {'diag' : {'top_n' : 200, 'min_support' : 0}}, multi_col = True))#,
     ('hcc_cat_encode', ColumnTransformer(columns = hcc_cat_var, transformer = HCCEncoder, transformer_params = {'diag_first' : {'add_noise' : False}}))#,
     #('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
     #('scaler', StandardScaler())

@@ -16,7 +16,8 @@ def select_x(X, name):
 # class which applies column operations to multiple columns
 class ColumnTransformer(FeatureUnion):
 
-    def __init__(self, columns, transformer, transformer_params = {}, n_jobs = 1, multicol = False):
+    def __init__(self, columns, transformer, transformer_params = {}, n_jobs = 1, \
+                 multi_col = False, pandas_out = True):
 
         # create transformer list
         transformer_list = [('other_col', ColumnFeedThrough(columns))]
@@ -32,16 +33,29 @@ class ColumnTransformer(FeatureUnion):
         self.transformer_list = transformer_list
         self.transformer_weights = None
         self.n_jobs = n_jobs
-        self.multicol = multicol
+        self.multi_col = multi_col
+        self.pandas_out = pandas_out
 
         # validate
         self._validate_transformers()
 
     def get_feature_names(self):
-        if self.multicol:
-            return super(ColumnGenerator, self).get_feature_names()
+        feature_names = self.transformer_list[0][-1].col
+        if self.multi_col:
+            for name, trans in self.transformer_list[1:]:
+                if not hasattr(trans, 'get_feature_names'):
+                    raise AttributeError("Transformer %s (type %s) does not "
+                                         "provide get_feature_names."
+                                         % (str(name), type(trans).__name__))
+                feature_names.extend([name + "__" + f for f in trans.get_feature_names()])
         else:
-            return self.transformer_list[0][-1].col + self.columns
+            feature_names.extend(self.columns)
+        return feature_names
+
+    def output(self, X):
+        if self.pandas_out:
+            return pd.DataFrame(data = X, columns = self.get_feature_names())
+        return X
 
     def fit(self, X, y=None):
         self._validate_transformers()
@@ -69,7 +83,8 @@ class ColumnTransformer(FeatureUnion):
             Xs = sparse.hstack(Xs).tocsr()
         else:
             Xs = np.column_stack(Xs)
-        return Xs
+
+        return self.output(Xs)
 
     def transform(self, X):
         Xs = Parallel(n_jobs=self.n_jobs)(
@@ -84,7 +99,8 @@ class ColumnTransformer(FeatureUnion):
             Xs = sparse.hstack(Xs).tocsr()
         else:
             Xs = np.column_stack(Xs)
-        return Xs
+
+        return self.output(Xs)
 
 
 # selects columns
