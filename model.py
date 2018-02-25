@@ -14,7 +14,7 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 
 from xgboost import XGBClassifier
 
-from skl.onehot import OneHotEncoder
+from skl.one_hot import OneHotEncoder
 from skl.hcc import HCCEncoder
 from skl.stack import StackingClassifier
 from skl.util import add_dict_prefix, get_first
