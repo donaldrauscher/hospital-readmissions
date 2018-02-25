@@ -51,7 +51,7 @@ class LabelEncoder(BaseEstimator, TransformerMixin):
 # one-hot encoder for a single column
 class OneHotEncoderBase(BaseEstimator, TransformerMixin):
 
-    def __init__(self, label_encoder_params = {}):
+    def __init__(self, **label_encoder_params):
         self.label_encoder = LabelEncoder(**label_encoder_params)
 
     def fit(self, X, y = None):
@@ -84,5 +84,6 @@ class OneHotEncoder(ColumnTransformer):
         super(OneHotEncoder, self).__init__(columns = columns,
                                             transformer = OneHotEncoderBase,
                                             transformer_params = transformer_params,
+                                            n_jobs = n_jobs,
                                             multi_col = True,
                                             pandas_out = pandas_out)
