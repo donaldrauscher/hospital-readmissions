@@ -80,10 +80,10 @@ class OneHotEncoderBase(BaseEstimator, TransformerMixin):
 # one-hot encoder
 class OneHotEncoder(ColumnTransformer):
 
-    def __init__(self, columns, transformer_params = {}, n_jobs = 1, pandas_out = True):
-        super(OneHotEncoder, self).__init__(columns = columns,
-                                            transformer = OneHotEncoderBase,
-                                            transformer_params = transformer_params,
-                                            n_jobs = n_jobs,
-                                            multi_col = True,
-                                            pandas_out = pandas_out)
+    @property
+    def transformer(self):
+        return OneHotEncoderBase
+
+    @property
+    def multi_col(self):
+        return True

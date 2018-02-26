@@ -83,13 +83,12 @@ class HCCEncoderBase(BaseEstimator):
         return self.transform_one(self, x)
 
 
-# one-hot encoder
 class HCCEncoder(ColumnTransformer):
 
-    def __init__(self, columns, transformer_params = {}, n_jobs = 1, pandas_out = True):
-        super(HCCEncoder, self).__init__(columns = columns,
-                                         transformer = HCCEncoderBase,
-                                         transformer_params = transformer_params,
-                                         n_jobs = n_jobs,
-                                         multi_col = False,
-                                         pandas_out = pandas_out)
+    @property
+    def transformer(self):
+        return HCCEncoderBase
+
+    @property
+    def multi_col(self):
+        return False

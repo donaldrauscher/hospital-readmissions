@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 
+import abc, copy
+
 from scipy import sparse
 
 from sklearn.pipeline import FeatureUnion, _fit_one_transformer, _transform_one, _fit_transform_one
@@ -16,31 +18,36 @@ def select_x(X, name):
 # class which applies column operations to multiple columns
 class ColumnTransformer(FeatureUnion):
 
-    def __init__(self, columns, transformer, transformer_params = {}, n_jobs = 1, \
-                 multi_col = False, pandas_out = True):
+    def __init__(self, columns, column_params = {}, n_jobs = 1, pandas_out = True):
 
         # create transformer list
         transformer_list = [('other_col', ColumnFeedThrough(columns))]
         for c in columns:
-            transformer_params_c = transformer_params.get(c, {})
-            transformer_c = transformer(**transformer_params_c)
+            column_params_c = column_params.get(c, {})
+            transformer_c = self.transformer(**column_params_c)
             transformer_list.append((c, transformer_c))
 
         # set
         self.columns = columns
-        self.transformer = transformer
-        self.transformer_params = transformer_params
+        self.column_params = column_params
         self.transformer_list = transformer_list
         self.transformer_weights = None
         self.n_jobs = n_jobs
-        self.multi_col = multi_col
         self.pandas_out = pandas_out
 
         # validate
         self._validate_transformers()
 
+    @abc.abstractmethod
+    def transformer(self):
+        pass
+
+    @abc.abstractmethod
+    def multi_col(self):
+        pass
+
     def get_feature_names(self):
-        feature_names = self.transformer_list[0][-1].col
+        feature_names = copy.copy(self.transformer_list[0][-1].col)
         if self.multi_col:
             for name, trans in self.transformer_list[1:]:
                 if not hasattr(trans, 'get_feature_names'):
@@ -111,7 +118,8 @@ class ColumnFeedThrough(BaseEstimator, TransformerMixin):
         self.col = []
 
     def fit(self, X, y = None):
-        self.col = [x for x in list(X.columns) if x not in self.drop_col]
+        X = X.drop(labels = self.drop_col, axis = 1)
+        self.col = list(X.columns)
         return self
 
     def transform(self, X):
