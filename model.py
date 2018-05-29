@@ -1,4 +1,5 @@
 import yaml
+import dill
 
 import pandas as pd
 import numpy as np
@@ -14,101 +15,59 @@ from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_sc
 
 from xgboost import XGBClassifier
 
-from skl.one_hot import OneHotEncoder
-from skl.hcc import HCCEncoder
-from skl.stack import StackingClassifier
-from skl.util import add_dict_prefix, get_first
+from lib import *
 
 # set random seed
 np.random.seed(1)
 
 # import our data
-admit = pd.read_csv('data/diabetic_data.csv', na_filter = True, na_values = ['?', 'None'])
-
-# encode medication variables
-med_var = ['metformin', 'repaglinide', 'nateglinide', 'chlorpropamide', 'glimepiride', 'acetohexamide', \
-           'glipizide', 'glyburide', 'tolbutamide', 'pioglitazone', 'rosiglitazone', 'acarbose', 'miglitol', \
-           'troglitazone', 'tolazamide', 'examide', 'citoglipton', 'insulin', 'glyburide-metformin', \
-           'glipizide-metformin', 'glimepiride-pioglitazone', 'metformin-rosiglitazone', 'metformin-pioglitazone']
-
-for m in med_var:
-    admit['has_' + m] = admit[m].apply(lambda x: 0 if x == 'No' else 1)
-    admit['dir_' + m] = admit[m].apply(lambda x: -1 if x == 'Down' else 1 if x == 'Up' else 0)
-
-admit.drop(labels = med_var, axis = 1, inplace = True)
-admit['diabetesMed'] = admit.diabetesMed.apply(lambda x: 1 if x == 'Yes' else 0)
-admit['change'] = admit.change.apply(lambda x: 1 if x == 'Ch' else 0)
-
-# encode directional variables
-def directional_encode(df, col, val):
-    has_null = np.sum(df[col].isnull())
-    if has_null:
-        df['has_' + col] = df[col].isnull().astype(int)
-        df.loc[df[col].isnull(), [col]] = 0
-    for i,v in enumerate(val):
-        df.loc[df[col].astype(str) == v, [col]] = i
-    return df
-
-def make_range(start, stop, increment, pattern = "[%s-%s)"):
-    r = np.arange(start, stop + 1, increment)
-    r1, r2 = r[:-1], r[1:]
-    r = [pattern % (i[0], i[1]) for i in zip(r1, r2)]
-    r = r + ['>%s' % (stop)]
-    return r
-
-admit = directional_encode(admit, 'A1Cresult', ['Norm','>7','>8'])
-admit = directional_encode(admit, 'max_glu_serum', ['Norm','>200','>300'])
-admit = directional_encode(admit, 'weight', make_range(0, 200, 25))
-admit = directional_encode(admit, 'age', make_range(0, 100, 10))
-
-# combine diagnosis codes into array; remove missing
-diag = admit[['diag_1', 'diag_2', 'diag_3']].values
-diag = [x[~pd.isnull(x)] for x in diag]
-admit['diag'] = pd.Series(diag)
-admit['diag_first'] = pd.Series([get_first(x) for x in diag])
+admit_orig = pd.read_csv('data/diabetic_data.csv', na_filter=True, na_values=['?', 'None']).head(10000)
+admit = admit_orig.head(10000)
 
 # encode our y variable
 admit['readmitted'] = admit.readmitted.apply(lambda x: 1 if x == '<30' else 0)
 
-# remove a few columns we don't need
-drop_var = ['encounter_id', 'patient_nbr', 'diag_1', 'diag_2', 'diag_3']
-admit.drop(labels = drop_var, axis = 1, inplace = True)
-
 # train / test split
-xdata = admit.drop(labels = ['readmitted'], axis = 1)
+xdata = admit.drop(labels=['readmitted'], axis=1)
 ydata = admit.readmitted
-xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata, test_size = 0.2, random_state = 1)
+xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata, test_size=0.2, random_state=1)
 
 # set up pipelines
-cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id', \
-           'race', 'gender', 'payer_code', 'medical_specialty', 'diag']
-
-hcc_cat_var = ['diag_first']
+base = [
+    ('xvar', FunctionTransformer(lambda X: X[xvar].copy(), validate=False)),
+	('med', FunctionTransformer(med_features, validate=False)),
+    ('directional', FunctionTransformer(directional_features, validate=False)),
+    ('diag', FunctionTransformer(diag_features, validate=False))
+]
 
 fe1 = [
-    ('one_hot', OneHotEncoder(columns = cat_var, column_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
-    ('hcc', HCCEncoder(columns = hcc_cat_var, column_params = {'diag_first' : {'add_noise' : False}})),
-    ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
+    ('one_hot', OneHotEncoder(columns=cat_var, column_params={'diag': {'top_n': 200, 'min_support': 0}})),
+    ('hcc', HCCEncoder(columns=hcc_cat_var, column_params={'diag_first': {'add_noise': False}})),
+    ('imputer', Imputer(missing_values='NaN', strategy='median')),
     ('scaler', StandardScaler())
 ]
 
+qc = Pipeline(steps=base+fe1).fit(xdata, ydata)
+qc2 = qc.transform(admit_orig)
+raise
+
 fe2 = [
-    ('filter', FunctionTransformer(lambda X: X.drop(labels = hcc_cat_var, axis = 1), validate = False)),
-    ('one_hot', OneHotEncoder(columns = cat_var, column_params = {'diag' : {'top_n' : 200, 'min_support' : 0}})),
-    ('imputer', Imputer(missing_values = 'NaN', strategy = 'median')),
+    ('drop', FunctionTransformer(lambda X: X.drop(labels=hcc_cat_var, axis=1), validate=False)),
+    ('one_hot', OneHotEncoder(columns=cat_var, column_params={'diag': {'top_n': 200, 'min_support': 0}})),
+    ('imputer', Imputer(missing_values='NaN', strategy='median')),
     ('scaler', StandardScaler())
 ]
 
 model_stack = [
-    fe1 + [('lr', LogisticRegression(class_weight = "balanced"))],
-    fe2 + [('rf', RandomForestClassifier(random_state = 1, class_weight = "balanced"))],
-    fe2 + [('xgb', XGBClassifier(seed = 1, scale_pos_weight = (1 / np.mean(ydata_train) - 1)))]
+    base + fe1 + [('lr', LogisticRegression(random_state=1, class_weight="balanced"))],
+    base + fe2 + [('rf', RandomForestClassifier(random_state=1, class_weight="balanced"))],
+    base + fe2 + [('xgb', XGBClassifier(seed=1, scale_pos_weight=(1/np.mean(ydata_train)-1)))]
 ]
 
-model_stack = [(m[-1][0], Pipeline(steps = m)) for m in model_stack]
+model_stack = [(m[-1][0], Pipeline(steps=m)) for m in model_stack]
 
 # hyperparameter tuning for each model individually
-ss = ShuffleSplit(n_splits = 5, train_size = 0.25, random_state = 1)
+ss = ShuffleSplit(n_splits=5, train_size=0.25, random_state=1)
 tuning_constants = {'scoring': 'roc_auc', 'cv': ss, 'verbose': 1, 'refit': False}
 grid_search_tuning_arg = tuning_constants.copy()
 rand_search_tuning_arg = dict(tuning_constants, **{'random_state': 1, 'n_iter': 20})
@@ -166,8 +125,8 @@ except IOError:
         yaml.dump(param_optimal, f)
 
 # build model stack
-stack = StackingClassifier(classifiers = model_stack)
-stack.set_params(**add_dict_prefix(param_optimal, 'stack'))
+stack = StackingClassifier(classifiers=model_stack)
+stack.set_params(**param_optimal)
 stack.fit(xdata_train, ydata_train)
 
 # make predictions for our test set
@@ -196,7 +155,11 @@ print('Avg AUC: %s' % roc_auc_score(ydata_test, avg_pred))
 lr_model = stack.named_steps['stack'].transformer_list[0][1]
 features = lr_model.named_steps['hcc'].get_feature_names()
 coef = lr_model.named_steps['lr'].coef_[0]
-importance = pd.DataFrame(data = {'feature' : features, 'coef' : coef})
+importance = pd.DataFrame(data={'feature': features, 'coef': coef})
 importance = importance.loc[importance.coef != 0,:]
-importance.sort_values(by = ['coef'], ascending = False, inplace = True)
+importance.sort_values(by=['coef'], ascending=False, inplace=True)
 print(importance)
+
+# pickle
+with open('model.pkl', 'wb') as f:
+    dill.dump(stack, f)
