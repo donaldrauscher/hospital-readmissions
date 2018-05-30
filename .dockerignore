@@ -1,0 +1,5 @@
+venv/
+data/
+.git/
+.idea/
+.ipynb_checkpoints/
