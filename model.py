@@ -1,16 +1,15 @@
 import yaml
 import dill
+import functools
 
 import pandas as pd
 import numpy as np
-
-from scipy.stats import randint
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
-from sklearn.preprocessing import Imputer, StandardScaler, FunctionTransformer
+from sklearn.preprocessing import Imputer, StandardScaler, FunctionTransformer, scale
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
 
 from xgboost import XGBClassifier
@@ -21,8 +20,7 @@ from lib import *
 np.random.seed(1)
 
 # import our data
-admit_orig = pd.read_csv('data/diabetic_data.csv', na_filter=True, na_values=['?', 'None']).head(10000)
-admit = admit_orig.head(10000)
+admit = pd.read_csv('data/diabetic_data.csv', na_filter=True, na_values=['?', 'None'])
 
 # encode our y variable
 admit['readmitted'] = admit.readmitted.apply(lambda x: 1 if x == '<30' else 0)
@@ -35,7 +33,7 @@ xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata
 # set up pipelines
 base = [
     ('xvar', FunctionTransformer(lambda X: X[xvar].copy(), validate=False)),
-	('med', FunctionTransformer(med_features, validate=False)),
+    ('med', FunctionTransformer(med_features, validate=False)),
     ('directional', FunctionTransformer(directional_features, validate=False)),
     ('diag', FunctionTransformer(diag_features, validate=False))
 ]
@@ -46,10 +44,6 @@ fe1 = [
     ('imputer', Imputer(missing_values='NaN', strategy='median')),
     ('scaler', StandardScaler())
 ]
-
-qc = Pipeline(steps=base+fe1).fit(xdata, ydata)
-qc2 = qc.transform(admit_orig)
-raise
 
 fe2 = [
     ('drop', FunctionTransformer(lambda X: X.drop(labels=hcc_cat_var, axis=1), validate=False)),
@@ -85,9 +79,9 @@ param_grid = {
     'rf': {
         'n_estimators': [100],
         'max_depth': [3, None],
-        'max_features': randint(1, 10),
-        'min_samples_split': randint(2, 10),
-        'min_samples_leaf': randint(1, 10),
+        'max_features': np.arange(1, 11).tolist(),
+        'min_samples_split': np.arange(1, 11).tolist(),
+        'min_samples_leaf':np.arange(1, 11).tolist(),
         'bootstrap': [True, False],
         'criterion': ['gini', 'entropy']
     },
@@ -95,7 +89,7 @@ param_grid = {
         'n_estimators': (np.arange(1, 6) * 100).tolist(),
         'learning_rate': (np.arange(2, 11) / 100.0).tolist(),
         'max_depth': (np.arange(2, 6) * 2).tolist(),
-        'min_child_weight': randint(1, 10),
+        'min_child_weight': np.arange(1, 11).tolist(),
         'subsample': [0.5, 0.75, 1],
         'colsample_bytree': [0.5, 0.75, 1]
     }
@@ -151,13 +145,27 @@ for m in stack.named_steps['stack'].transformer_list:
 avg_pred = np.average(pred, axis = 0)
 print('Avg AUC: %s' % roc_auc_score(ydata_test, avg_pred))
 
-# importance scores (from logistic regression)
+# importance scores
 lr_model = stack.named_steps['stack'].transformer_list[0][1]
-features = lr_model.named_steps['hcc'].get_feature_names()
-coef = lr_model.named_steps['lr'].coef_[0]
-importance = pd.DataFrame(data={'feature': features, 'coef': coef})
-importance = importance.loc[importance.coef != 0,:]
-importance.sort_values(by=['coef'], ascending=False, inplace=True)
+rf_model = stack.named_steps['stack'].transformer_list[1][1]
+xgb_model = stack.named_steps['stack'].transformer_list[2][1]
+
+lr_features = lr_model.named_steps['hcc'].get_feature_names()
+tree_features = rf_model.named_steps['one_hot'].get_feature_names()
+
+lr_coef = lr_model.named_steps['lr'].coef_[0]
+rf_coef = rf_model.named_steps['rf'].feature_importances_
+xgb_coef = xgb_model.named_steps['xgb'].feature_importances_
+
+i1 = pd.DataFrame(data={'feature': lr_features, 'lr_coef': lr_coef})
+i2 = pd.DataFrame(data={'feature': tree_features, 'rf_imp': rf_coef})
+i3 = pd.DataFrame(data={'feature': tree_features, 'xgb_imp': xgb_coef})
+
+merge = functools.partial(pd.merge, on=['feature'], how="outer")
+importance = functools.reduce(merge, [i1, i2, i3])
+importance = importance.fillna(0)
+importance['overall'] = (scale(abs(importance.lr_coef)) + scale(importance.rf_imp) + scale(importance.xgb_imp))/3
+importance.sort_values(by=['overall'], ascending=False, inplace=True)
 print(importance)
 
 # pickle
