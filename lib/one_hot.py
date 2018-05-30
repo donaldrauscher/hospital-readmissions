@@ -58,7 +58,7 @@ class OneHotEncoderBase(BaseEstimator, TransformerMixin):
     def __init__(self, **label_encoder_params):
         self.label_encoder = LabelEncoder(**label_encoder_params)
 
-    def fit(self, X, y = None):
+    def fit(self, X, y=None):
         self.label_encoder.fit(X)
         return self
 

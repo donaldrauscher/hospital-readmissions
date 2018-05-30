@@ -18,9 +18,11 @@ def dbetabinom(a, b, k, n):
     k2 = round(k * n2 / n)
     return beta(k2 + a, n2 - k2 + b) / beta(a, b)
 
+
 # beta binomial log loss
 def betabinom_ll(par, arg):
     return np.sum(-np.log(dbetabinom(par[0], par[1], arg[0], arg[1])))
+
 
 # default params for MLE
 mle_param_defaults = dict(method="L-BFGS-B", x0=[1,1], bounds=[(0.5, 500), (0.5, 500)])

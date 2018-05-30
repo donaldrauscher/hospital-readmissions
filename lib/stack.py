@@ -16,6 +16,7 @@ def chop_col0(function):
         return function(*args, **kwargs)[:,1:]
     return wrapper
 
+
 def add_transform(classifiers):
     for key, classifier in classifiers:
         if isinstance(classifier, Pipeline):
@@ -24,6 +25,7 @@ def add_transform(classifiers):
         classifier.__class__.transform = chop_col0(classifier.__class__.predict_proba)
         # NOTE: need to add to class so `clone` in `cross_val_predict` works
 
+
 # default function applies logit to probabilities and applies logistic regression
 def default_meta_classifier():
     return Pipeline([
@@ -31,6 +33,7 @@ def default_meta_classifier():
         ('scaler', StandardScaler()),
         ('lr', LogisticRegression())
     ])
+
 
 # stacking classifier
 class StackingClassifier(Pipeline):
