@@ -47,7 +47,7 @@ def directional_features(df):
 # combine diagnosis codes into array; remove missing
 def diag_features(df):
     df = df.reset_index(drop=True)
-    diag = df[['diag_1', 'diag_2', 'diag_3']].as_matrix()
+    diag = df[['diag_1', 'diag_2', 'diag_3']].values
     diag = [x[~pd.isnull(x)] for x in diag]
     df['diag'] = pd.Series(diag)
     df['diag_first'] = pd.Series([get_first(x) for x in diag])

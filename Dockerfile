@@ -5,18 +5,20 @@ ENV BASE /usr/share/model
 COPY requirements.txt model_apply.py model.pkl ${BASE}/
 COPY lib ${BASE}/lib
 
-RUN apk add --update --no-cache --virtual=.build-dep g++ openblas lapack-dev gfortran \
+RUN apk add --update --no-cache libstdc++ openblas lapack-dev \
+	&& apk add --update --no-cache --virtual=.build-dep g++ gfortran \
     && ln -s /usr/include/locale.h /usr/include/xlocale.h \
-    && cat ${BASE}/requirements.txt | grep -v xgboost >> ${BASE}/requirements.txt \
-    && pip install --no-cache -r ${BASE}/requirements.txt \
-    && rm -f ${BASE}/requirements.txt
-#    && find /usr/local \
-#        \( -type d -a -name test -o -name tests \) \
-#        -o \( -type f -a -name '*.pyc' -o -name '*.pyo' \) \
-#        -exec rm -f '{}' + \
-#    && apk del .build-dep
+    && cat ${BASE}/requirements.txt | grep -v xgboost >> ${BASE}/requirements-new.txt \
+    && pip install --no-cache -r ${BASE}/requirements-new.txt \
+    && rm -f ${BASE}/requirements*.txt \
+    && find /usr/local \
+        \( -type d -a -name test -o -name tests \) \
+        -o \( -type f -a -name '*.pyc' -o -name '*.pyo' \) \
+        -exec rm -f '{}' + \
+    && apk del .build-dep
 
-RUN apk add --update --no-cache --virtual=.build-dep git make \
+RUN apk add --update --no-cache libgomp \
+	&& apk add --update --no-cache --virtual=.build-dep git make g++ \
     && mkdir /src && cd /src \
     && git clone --recursive --depth 1 https://github.com/dmlc/xgboost \
     && sed -i '/#define DMLC_LOG_STACK_TRACE 1/d' /src/xgboost/dmlc-core/include/dmlc/base.h \

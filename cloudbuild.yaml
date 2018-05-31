@@ -1,6 +1,6 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '--pull', '--tag=gcr.io/$PROJECT_ID/${_IMAGE}:${_TAG}', '${_DOCKERFILE}']
+  args: ['build', '--pull', '--tag=gcr.io/$PROJECT_ID/${_IMAGE}:${_TAG}', '--cache-from=gcr.io/$PROJECT_ID/${_IMAGE}:${_TAG}', '${_DOCKERFILE}']
 images: ['gcr.io/$PROJECT_ID/${_IMAGE}:${_TAG}']
 substitutions:
   _IMAGE: hospital-readmissions

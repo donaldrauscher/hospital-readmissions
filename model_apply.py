@@ -7,8 +7,8 @@ from lib import *
 
 # parse arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('input', type=str)
-parser.add_argument('output', type=str, default='predictions.csv')
+parser.add_argument('--input', type=str)
+parser.add_argument('--output', type=str, default='predictions.csv')
 args = parser.parse_args()
 
 # load model
@@ -21,6 +21,6 @@ df = pd.read_csv(os.path.join(basedir, 'data', args.input), na_filter=True, na_v
 
 # generate predictions and score
 pred = model.predict_proba(df)
-pred.to_csv(os.path.join(basedir, 'data', args.output), index=False))
+pred.to_csv(os.path.join(basedir, 'data', args.output), index=False)
 
 
