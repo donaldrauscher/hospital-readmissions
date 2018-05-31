@@ -19,8 +19,8 @@ with open(os.path.join(basedir, 'model.pkl'), 'rb') as f:
 # load data
 df = pd.read_csv(os.path.join(basedir, 'data', args.input), na_filter=True, na_values=['?', 'None'])
 
-# generate predictions and score
+# generate predictions
 pred = model.predict_proba(df)
-pred.to_csv(os.path.join(basedir, 'data', args.output), index=False)
+np.savetxt(os.path.join(basedir, 'data', args.output), pred, delimiter=',')
 
 

@@ -9,10 +9,10 @@ Generate predictions with model:
 export PROJECT_ID=$(gcloud config get-value project -q)
 export IMAGE_ID=gcr.io/${PROJECT_ID}/hospital-readmissions:latest
 gcloud docker -- pull ${IMAGE_ID}
-docker run -v [path-to-data]:/usr/share/model/data ${IMAGE_ID} --input diabetic_data.csv
+docker run -v $(pwd)/data:/usr/share/model/data ${IMAGE_ID} --input diabetic_data.csv
 ```
 
-Test shelling into image:
+Shelling into image for testing:
 ```bash
-docker run -it -v [path-to-data]:/usr/share/model/data --entrypoint=ash ${IMAGE_ID}
+docker run -it -v $(pwd)/data:/usr/share/model/data --entrypoint=ash ${IMAGE_ID}
 ```
