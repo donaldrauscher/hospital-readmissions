@@ -74,7 +74,7 @@ class OneHotEncoderBase(BaseEstimator, TransformerMixin):
             df_row = np.arange(len(X))
         df_val = np.ones(len(df_col))
         
-        unknown = df_col == len(self.label_encoder.classes)
+        unknown = (df_col == len(self.label_encoder.classes))
         df_val, df_row, df_col = df_val[~unknown], df_row[~unknown], df_col[~unknown]
 
         df = sparse.coo_matrix((df_val, (df_row, df_col)), shape=(n_row, n_col)).tocsr()

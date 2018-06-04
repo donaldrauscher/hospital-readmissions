@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV, ShuffleSplit
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import Imputer, StandardScaler, FunctionTransformer, scale
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_auc_score
 
@@ -32,40 +32,37 @@ xdata_train, xdata_test, ydata_train, ydata_test = train_test_split(xdata, ydata
 
 # set up pipelines
 base = [
-    ('xvar', FunctionTransformer(lambda X: X[xvar].copy(), validate=False)),
-    ('med', FunctionTransformer(med_features, validate=False)),
-    ('directional', FunctionTransformer(directional_features, validate=False)),
-    ('diag', FunctionTransformer(diag_features, validate=False))
+    ('xv', FunctionTransformer(lambda X: X[xvar].copy(), validate=False)),
+    ('md', FunctionTransformer(med_features, validate=False)),
+    ('df', FunctionTransformer(directional_features, validate=False)),
+    ('dx', FunctionTransformer(diag_features, validate=False))
 ]
 
 fe1 = [
-    ('one_hot', OneHotEncoder(columns=cat_var, column_params={'diag': {'top_n': 200, 'min_support': 0}})),
-    ('hcc', HCCEncoder(columns=hcc_cat_var, column_params={'diag_first': {'add_noise': False}})),
-    ('imputer', Imputer(missing_values='NaN', strategy='median')),
-    ('scaler', StandardScaler())
+    ('oh', OneHotEncoder(columns=cat_var, iid=True, column_params={'min_support': 30}, pandas_out=True)),
+    ('hc', HCCEncoder(columns=hcc_cat_var, iid=True, column_params={'add_noise': False})),
+    ('im', Imputer(missing_values='NaN', strategy='median')),
+    ('ss', StandardScaler())
 ]
 
 fe2 = [
-    ('drop', FunctionTransformer(lambda X: X.drop(labels=hcc_cat_var, axis=1), validate=False)),
-    ('one_hot', OneHotEncoder(columns=cat_var, column_params={'diag': {'top_n': 200, 'min_support': 0}})),
-    ('imputer', Imputer(missing_values='NaN', strategy='median')),
-    ('scaler', StandardScaler())
+    ('dp', FunctionTransformer(lambda X: X.drop(labels=hcc_cat_var, axis=1), validate=False)),
+    ('oh', OneHotEncoder(columns=cat_var, iid=True, column_params={'min_support': 30}))
 ]
 
 model_stack = [
     base + fe1 + [('lr', LogisticRegression(random_state=1, class_weight="balanced"))],
     base + fe2 + [('rf', RandomForestClassifier(random_state=1, class_weight="balanced"))],
-    base + fe2 + [('xgb', XGBClassifier(seed=1, scale_pos_weight=(1/np.mean(ydata_train)-1)))]
+    base + fe2 + [('gb', XGBClassifier(seed=1, scale_pos_weight=(1/np.mean(ydata_train)-1)))]
 ]
 
 model_stack = [(m[-1][0], Pipeline(steps=m)) for m in model_stack]
 
 # hyperparameter tuning for each model individually
-ss = ShuffleSplit(n_splits=5, train_size=0.25, random_state=1)
-tuning_constants = {'scoring': 'roc_auc', 'cv': ss, 'verbose': 1, 'refit': False}
+tuning_constants = {'scoring': 'roc_auc', 'cv': 3, 'verbose': 1, 'refit': False}
 grid_search_tuning_arg = tuning_constants.copy()
 rand_search_tuning_arg = dict(tuning_constants, **{'random_state': 1, 'n_iter': 20})
-tuning_types = {'lr': GridSearchCV, 'rf': RandomizedSearchCV, 'xgb': RandomizedSearchCV}
+tuning_types = {'lr': GridSearchCV, 'rf': RandomizedSearchCV, 'gb': RandomizedSearchCV}
 
 def make_tuner(cls, pipeline, params):
     kwarg = grid_search_tuning_arg if cls is GridSearchCV else rand_search_tuning_arg
@@ -77,19 +74,17 @@ param_grid = {
         'C': [0.01, 0.1, 1]
     },
     'rf': {
-        'n_estimators': [100],
-        'max_depth': [3, None],
-        'max_features': np.arange(1, 11).tolist(),
-        'min_samples_split': np.arange(1, 11).tolist(),
-        'min_samples_leaf':np.arange(1, 11).tolist(),
+        'n_estimators': [100, 200, 300],
+        'max_depth': [3, 6, None],
+        'min_samples_leaf': [5, 10, 20],
         'bootstrap': [True, False],
         'criterion': ['gini', 'entropy']
     },
-    'xgb': {
-        'n_estimators': (np.arange(1, 6) * 100).tolist(),
-        'learning_rate': (np.arange(2, 11) / 100.0).tolist(),
-        'max_depth': (np.arange(2, 6) * 2).tolist(),
-        'min_child_weight': np.arange(1, 11).tolist(),
+    'gb': {
+        'n_estimators': [100, 200, 300],
+        'learning_rate': [0.02, 0.05, 0.1],
+        'max_depth': [3, 6, 9],
+        'min_child_weight': [1, 3, 5],
         'subsample': [0.5, 0.75, 1],
         'colsample_bytree': [0.5, 0.75, 1]
     }
@@ -150,12 +145,12 @@ lr_model = stack.named_steps['stack'].transformer_list[0][1]
 rf_model = stack.named_steps['stack'].transformer_list[1][1]
 xgb_model = stack.named_steps['stack'].transformer_list[2][1]
 
-lr_features = lr_model.named_steps['hcc'].get_feature_names()
-tree_features = rf_model.named_steps['one_hot'].get_feature_names()
+lr_features = lr_model.named_steps['hc'].get_feature_names()
+tree_features = rf_model.named_steps['oh'].get_feature_names()
 
 lr_coef = lr_model.named_steps['lr'].coef_[0]
 rf_coef = rf_model.named_steps['rf'].feature_importances_
-xgb_coef = xgb_model.named_steps['xgb'].feature_importances_
+xgb_coef = xgb_model.named_steps['gb'].feature_importances_
 
 i1 = pd.DataFrame(data={'feature': lr_features, 'lr_coef': lr_coef})
 i2 = pd.DataFrame(data={'feature': tree_features, 'rf_imp': rf_coef})

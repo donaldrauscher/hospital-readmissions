@@ -5,7 +5,13 @@ This is a model for predicting hospital readmission among patients with diabetes
 
 Model is built with Sklearn.  Python environment specified in `requirements.txt`.  I also created a Docker image which packages the .pkl as an executable.
 
-\<PLACEHOLDER FOR MODEL RESULTS\>
+| Model | AUC |
+|--- | --- |
+| LR+RF+XGB Stack | 0.6990824552912449 |
+| LR+RF+XGB Avg | 0.6981398497127431 |
+| XGB | 0.6956653497449965 |
+| RF | 0.6952079165690574 |
+| LR | 0.684611003872049 |
 
 Build model (output is model.pkl):
 ```bash

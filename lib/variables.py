@@ -17,7 +17,7 @@ other_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_
 
 xvar = med_var + lab_var + demo_var + diag_var + other_var
 
-cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id', \
+cat_var = ['admission_type_id', 'discharge_disposition_id', 'admission_source_id',\
            'race', 'gender', 'payer_code', 'medical_specialty', 'diag']
 
 hcc_cat_var = ['diag_first']
